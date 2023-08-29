@@ -69,6 +69,3 @@
 - name: Start Bastion virtual machine
   ansible.builtin.command: virsh start ocp4-bastion
 
-
-- name: Start Bastion virtual machine
-  ansible.builtin.shell: virsh start ocp4-bastion
