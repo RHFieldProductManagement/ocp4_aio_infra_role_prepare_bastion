@@ -1,10 +1,21 @@
 ---
 # vim: set ft=ansible:
 
+- name: Get list of the running VMs
+  ansible.builtin.command: virsh list --name
+  register: list_vms
+
 - name: Make sure Bastion VM isn't running
-  virt:
-    name: ocp4-bastion
-    state: shutdown
+  ansible.builtin.command: virsh shutdown ocp4-bastion
+  when: '"ocp4-bastion" in list_vms.stdout_lines'
+
+- name: Wait till ocp4-bastion is not running
+  ansible.builtin.command: virsh list --name
+  register: list_vms
+  delay: 6
+  retries: 10
+  until: '"ocp4-bastion" not in list_vms.stdout_lines'
+
 
 - name: Create temporary users SSH public key file
   ansible.builtin.lineinfile:
@@ -56,7 +67,4 @@
   when: not centos8_cnv.stat.exists
 
 - name: Start Bastion virtual machine
-  virt:
-    name: ocp4-bastion
-    state: running
-
+  ansible.builtin.command: virsh start ocp4-bastion
