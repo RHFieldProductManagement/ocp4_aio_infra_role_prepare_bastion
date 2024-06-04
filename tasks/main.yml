@@ -1,27 +1,15 @@
 ---
 # vim: set ft=ansible:
 
-- name: Get list of the running VMs
-  ansible.builtin.command: virsh list --name
-  register: list_vms
-
 - name: Make sure Bastion VM isn't running
   ansible.builtin.command: virsh shutdown ocp4-bastion
-  when: '"ocp4-bastion" in list_vms.stdout_lines'
-
-- name: Wait till ocp4-bastion is not running
-  ansible.builtin.command: virsh list --name
-  register: list_vms
-  delay: 6
-  retries: 10
-  until: '"ocp4-bastion" not in list_vms.stdout_lines'
-
 
 - name: Create temporary users SSH public key file
   ansible.builtin.lineinfile:
     path: /tmp/user-key.pub
     line: "{{ ocp4_aio_ssh_key }}"
-    create: yes
+    create: true
+    mode: "0664"
 
 - name: Inject users SSH key into Bastion VM for Ansible
   ansible.builtin.command: >
@@ -34,37 +22,22 @@
   delay: 30
 
 - name: Check if we've done this stage before with existing image
-  stat:
-    path: /var/lib/libvirt/images/centos8-kvm-cnv.qcow2
-  register: centos8_cnv
+  ansible.builtin.stat:
+    path: /var/lib/libvirt/images/centos9-kvm-cnv.qcow2
+  register: centos9_cnv
 
-- name: Make a copy of the centos8-kvm image
+- name: Make a copy of the centos9-kvm image
+  when: not centos9_cnv.stat.exists
   ansible.builtin.copy:
-    remote_src: yes
-    src: /var/lib/libvirt/images/centos8-kvm.qcow2
-    dest: /var/lib/libvirt/images/centos8-kvm-cnv.qcow2
-  when: not centos8_cnv.stat.exists
+    remote_src: true
+    src: /var/lib/libvirt/images/centos9-kvm.qcow2
+    dest: /var/lib/libvirt/images/centos9-kvm-cnv.qcow2
+    mode: "0664"
 
-- name: Set the root password on the centos8-kvm-cnv image
+- name: Set the root password on the centos9-kvm-cnv image
+  when: not centos9_cnv.stat.exists
   ansible.builtin.command: >
-    virt-customize -a /var/lib/libvirt/images/centos8-kvm-cnv.qcow2 --root-password password:{{ ocp4_aio_root_password }}
-  when: not centos8_cnv.stat.exists
-
-- name: Setup httpd in the bastion image
-  ansible.builtin.command: >
-    virt-customize -a /var/lib/libvirt/images/ocp4-bastion.qcow2 --install httpd
-  when: not centos8_cnv.stat.exists
-
-- name: Convert centos8-kvm-cnv image to raw
-  ansible.builtin.command: >
-    qemu-img convert -f qcow2 -O raw
-    /var/lib/libvirt/images/centos8-kvm-cnv.qcow2
-    /var/lib/libvirt/images/centos8-kvm-cnv.img
-
-- name: Inject CentOS8 base image to bastion machine
-  ansible.builtin.shell: >
-     virt-customize -a /var/lib/libvirt/images/ocp4-bastion.qcow2 --upload /var/lib/libvirt/images/centos8-kvm-cnv.img:/var/www/html/rhel8-kvm.img --selinux-relabel
-  when: not centos8_cnv.stat.exists
+    virt-customize -a /var/lib/libvirt/images/centos9-kvm-cnv.qcow2 --root-password password:{{ ocp4_aio_root_password }}
 
 - name: Start Bastion virtual machine
-  ansible.builtin.command: virsh start ocp4-bastion
+  ansible.builtin.shell: virsh start ocp4-bastion
